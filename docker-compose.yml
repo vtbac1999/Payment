@@ -1,0 +1,10 @@
+version: "1.0"
+services:
+  app:
+    image: vn.lit.vn:1.0.0
+    volumes:
+      - ./configs/payment:/app/configs/payment
+
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
