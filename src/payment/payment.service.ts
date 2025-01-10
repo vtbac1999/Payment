@@ -5,10 +5,12 @@ import { createHmac } from "crypto";
 export class PaymentService {
   private readonly baseUrl: string;
   private readonly apiKey: string;
+  private readonly clientKey: string;
 
   constructor() {
     this.baseUrl = process.env.PAYOS_BASE_URL;
     this.apiKey = process.env.PAYOS_API_KEY;
+    this.clientKey = process.env.PAYOS_CLIENT_KEY;
   }
 
   // Tạo đơn hàng
@@ -17,24 +19,25 @@ export class PaymentService {
       const description = await this.generateDescription();
       const dataToSignature = await this.createSignature({
         amount,
-        orderCode: Number(String(new Date().getTime()).slice(-6)),
+        cancelUrl: process.env.DOMAIN,
         description,
-        cancelUrl: "http://localhost:3000",
-        returnUrl: "http://localhost:3000",
+        orderCode: Number(String(new Date().getTime()).slice(-6)),
+        returnUrl: process.env.DOMAIN,
       })
       const response = await axios.post(
         `${this.baseUrl}/payment-requests`,
         {
           amount,
-          orderCode: Number(String(new Date().getTime()).slice(-6)),
+          cancelUrl: process.env.DOMAIN,
           description,
-          cancelUrl: "http://localhost:3000",
-          returnUrl: "http://localhost:3000",
+          orderCode: Number(String(new Date().getTime()).slice(-6)),
+          returnUrl: process.env.DOMAIN,
           signature: dataToSignature,
         },
         {
           headers: {
-            Authorization: `Bearer ${this.apiKey}`,
+            'x-client-id': this.clientKey,
+            'x-api-key': this.apiKey,
           },
         }
       );
@@ -103,17 +106,20 @@ export class PaymentService {
       })
       .join("&");
   }
-  async createSignature(data: any){
-    const sortedDataByKey = this.sortObjDataByKey(data); // Sắp xếp key của object
-    const dataQueryStr = this.convertObjToQueryStr(sortedDataByKey); // Chuyển sang query string
-    const dataToSignature = createHmac("sha256", process.env.PAYOS_API_SECRET)
-      .update(dataQueryStr)
-      .digest("hex"); // Tạo chữ ký mới
-      return dataToSignature;
+  async createSignature(data: any) {
+    const sortedKeys = Object.keys(data).sort();
+    const dataString = sortedKeys.map((key) => `${key}=${data[key]}`).join('&');
+    const hmac = createHmac('sha256', process.env.PAYOS_API_SECRET);
+    hmac.update(dataString);
+    return hmac.digest('hex');
   }
 
   async validateWebhook(data: Record<string, any>, signature: string): Promise<boolean> {
-   const dataToSignature = await this.createSignature(data);
+    const sortedDataByKey = this.sortObjDataByKey(data); // Sắp xếp key của object
+    const dataQueryStr = this.convertObjToQueryStr(sortedDataByKey); // Chuyển sang query string
+    const dataToSignature = createHmac('sha256', process.env.PAYOS_API_SECRET)
+      .update(dataQueryStr)
+      .digest('hex'); // Tạo chữ ký mới
     return dataToSignature === signature; // So sánh chữ ký
   }
 }
