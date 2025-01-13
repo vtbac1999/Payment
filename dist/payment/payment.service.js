@@ -33,7 +33,7 @@ let PaymentService = class PaymentService {
                 orderCode: createOrderDto.orderCode,
                 returnUrl: domain,
             });
-            const response = await axios_1.default.post(`${this.baseUrl}/payment-requests`, {
+            const response = await axios_1.default.post(`${this.baseUrl}/v2/payment-requests`, {
                 amount: createOrderDto.amount,
                 cancelUrl: domain,
                 description: createOrderDto.type === 1

@@ -32,7 +32,7 @@ export class PaymentService {
         returnUrl: domain,
       });
       const response = await axios.post(
-        `${this.baseUrl}/payment-requests`,
+        `${this.baseUrl}/v2/payment-requests`,
         {
           amount: createOrderDto.amount,
           cancelUrl: domain,
