@@ -27,8 +27,8 @@ export class PaymentService {
         description:
           createOrderDto.type === 1
             ? "LSM"
-            : "AI" + Number(String(new Date().getTime()).slice(-6)),
-        orderCode: Number(String(new Date().getTime()).slice(-6)),
+            : "AI",
+        orderCode: createOrderDto.orderCode,
         returnUrl: domain,
       });
       const response = await axios.post(
@@ -39,8 +39,8 @@ export class PaymentService {
           description:
             createOrderDto.type === 1
               ? "LSM"
-              : "AI" + Number(String(new Date().getTime()).slice(-6)),
-          orderCode: Number(String(new Date().getTime()).slice(-6)),
+              : "AI",
+          orderCode: createOrderDto.orderCode,
           returnUrl: domain,
           signature: dataToSignature,
         },
