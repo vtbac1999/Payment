@@ -17,15 +17,13 @@ exports.CreatePaymentDto = CreatePaymentDto;
 __decorate([
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
+], CreatePaymentDto.prototype, "orderCode", void 0);
+__decorate([
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
 ], CreatePaymentDto.prototype, "amount", void 0);
 __decorate([
-    (0, class_validator_1.IsInt)(),
-    (0, class_validator_1.Min)(0, {
-        message: 'Value must be at least 0',
-    }),
-    (0, class_validator_1.Max)(1, {
-        message: 'Value must be at most 1',
-    }),
+    (0, class_validator_1.IsIn)([0, 1], { message: 'Value must be either 0 or 1' }),
     __metadata("design:type", Number)
 ], CreatePaymentDto.prototype, "type", void 0);
 //# sourceMappingURL=create-payment.dto.js.map

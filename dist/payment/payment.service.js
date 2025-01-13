@@ -17,27 +17,35 @@ let PaymentService = class PaymentService {
     constructor() {
         this.baseUrl = process.env.PAYOS_BASE_URL;
         this.apiKey = process.env.PAYOS_API_KEY;
+        this.clientKey = process.env.PAYOS_CLIENT_KEY;
     }
-    async createPaymentOrder(amount) {
+    async createPaymentOrder(createOrderDto) {
         try {
-            const description = await this.generateDescription();
+            const domain = createOrderDto.type === 1
+                ? process.env.DOMAIN_LSM
+                : process.env.DOMAIN_AI;
             const dataToSignature = await this.createSignature({
-                amount,
-                orderCode: Number(String(new Date().getTime()).slice(-6)),
-                description,
-                cancelUrl: "http://localhost:3000",
-                returnUrl: "http://localhost:3000",
+                amount: createOrderDto.amount,
+                cancelUrl: domain,
+                description: createOrderDto.type === 1
+                    ? "LSM"
+                    : "AI",
+                orderCode: createOrderDto.orderCode,
+                returnUrl: domain,
             });
             const response = await axios_1.default.post(`${this.baseUrl}/payment-requests`, {
-                amount,
-                orderCode: Number(String(new Date().getTime()).slice(-6)),
-                description,
-                cancelUrl: "http://localhost:3000",
-                returnUrl: "http://localhost:3000",
+                amount: createOrderDto.amount,
+                cancelUrl: domain,
+                description: createOrderDto.type === 1
+                    ? "LSM"
+                    : "AI",
+                orderCode: createOrderDto.orderCode,
+                returnUrl: domain,
                 signature: dataToSignature,
             }, {
                 headers: {
-                    Authorization: `Bearer ${this.apiKey}`,
+                    "x-client-id": this.clientKey,
+                    "x-api-key": this.apiKey,
                 },
             });
             return response.data;
@@ -58,17 +66,6 @@ let PaymentService = class PaymentService {
         catch (error) {
             throw new common_1.HttpException(error.response?.data || "Failed to fetch payment status", error.response?.status || common_1.HttpStatus.INTERNAL_SERVER_ERROR);
         }
-    }
-    async generateDescription() {
-        const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-        const length = 6;
-        let result = "";
-        for (let i = 0; i < length; i++) {
-            const randomIndex = Math.floor(Math.random() * characters.length);
-            result += characters[randomIndex];
-        }
-        const description = "LIT" + result;
-        return description;
     }
     sortObjDataByKey(object) {
         const orderedObject = Object.keys(object)
@@ -95,16 +92,40 @@ let PaymentService = class PaymentService {
             .join("&");
     }
     async createSignature(data) {
+        const sortedKeys = Object.keys(data).sort();
+        const dataString = sortedKeys.map((key) => `${key}=${data[key]}`).join("&");
+        const hmac = (0, crypto_1.createHmac)("sha256", process.env.PAYOS_API_SECRET);
+        hmac.update(dataString);
+        return hmac.digest("hex");
+    }
+    async validateWebhook(data, signature) {
         const sortedDataByKey = this.sortObjDataByKey(data);
         const dataQueryStr = this.convertObjToQueryStr(sortedDataByKey);
         const dataToSignature = (0, crypto_1.createHmac)("sha256", process.env.PAYOS_API_SECRET)
             .update(dataQueryStr)
             .digest("hex");
-        return dataToSignature;
-    }
-    async validateWebhook(data, signature) {
-        const dataToSignature = await this.createSignature(data);
         return dataToSignature === signature;
+    }
+    checkPrefixMultiple(description) {
+        if (description.startsWith('LSM')) {
+            return 'LSM';
+        }
+        else if (description.startsWith('AI')) {
+            return 'AI';
+        }
+        else {
+            throw new common_1.HttpException('Invalid prefix', common_1.HttpStatus.BAD_REQUEST);
+        }
+    }
+    async webhook(type, payload, signature) {
+        const url = type == "LSM"
+            ? `${process.env.DOMAIN_LSM}/webhook/`
+            : `${process.env.DOMAIN_AI}/webhook/`;
+        const apiResponse = await axios_1.default.post(url, {
+            data: payload,
+            signature: signature,
+        });
+        return apiResponse.data;
     }
 };
 exports.PaymentService = PaymentService;

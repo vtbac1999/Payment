@@ -15,35 +15,39 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentController = void 0;
 const common_1 = require("@nestjs/common");
 const payment_service_1 = require("./payment.service");
+const create_payment_dto_1 = require("./dto/create-payment.dto");
 let PaymentController = class PaymentController {
     constructor(paymentService) {
         this.paymentService = paymentService;
     }
-    async createPaymentOrder(createOrderDto) {
-        const { amount } = createOrderDto;
-        return await this.paymentService.createPaymentOrder(amount);
+    async createPaymentOrder(createOrderDto, res) {
+        const data = await this.paymentService.createPaymentOrder(createOrderDto);
+        if (data.code != '00') {
+            throw new common_1.HttpException(data.desc, data.code);
+        }
+        res.redirect(200, data.data.checkoutUrl);
     }
     async checkPaymentStatus(orderId) {
         return this.paymentService.checkPaymentStatus(orderId);
     }
-    handleWebhook(webhookPayload) {
+    async handleWebhook(webhookPayload) {
         const { data, signature } = webhookPayload;
-        const isValid = this.paymentService.validateWebhook(data, signature);
+        const isValid = await this.paymentService.validateWebhook(data, signature);
         if (!isValid) {
             throw new common_1.HttpException('Invalid webhook signature', common_1.HttpStatus.FORBIDDEN);
         }
-        return {
-            message: 'Webhook received successfully',
-            data,
-        };
+        const prefix = this.paymentService.checkPrefixMultiple(data.description);
+        const response = await this.paymentService.webhook(prefix, data, signature);
+        return response;
     }
 };
 exports.PaymentController = PaymentController;
 __decorate([
     (0, common_1.Post)('create'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [create_payment_dto_1.CreatePaymentDto, Object]),
     __metadata("design:returntype", Promise)
 ], PaymentController.prototype, "createPaymentOrder", null);
 __decorate([
@@ -58,7 +62,7 @@ __decorate([
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Object)
+    __metadata("design:returntype", Promise)
 ], PaymentController.prototype, "handleWebhook", null);
 exports.PaymentController = PaymentController = __decorate([
     (0, common_1.Controller)('payment'),
