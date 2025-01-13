@@ -11,6 +11,12 @@ export class PaymentController {
   @Post('create')
   async createPaymentOrder(@Body() createOrderDto: CreatePaymentDto, @Res() res: Response) {
     const data = await this.paymentService.createPaymentOrder(createOrderDto);
+    if(data.code != '00'){
+      throw new HttpException(
+        data.desc,
+        data.code
+      );
+    }
     res.redirect(200, data.data.checkoutUrl);
   }
 
