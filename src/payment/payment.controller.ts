@@ -1,5 +1,7 @@
-import { Controller, Post, Get, Body, Param, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, HttpException, HttpStatus, Res } from '@nestjs/common';
 import { PaymentService } from './payment.service';
+import { CreatePaymentDto } from './dto/create-payment.dto';
+import { Response } from 'express';
 
 @Controller('payment')
 export class PaymentController {
@@ -7,9 +9,9 @@ export class PaymentController {
 
   // Tạo đơn hàng thanh toán
   @Post('create')
-  async createPaymentOrder(@Body() createOrderDto: { amount: number }) {
-    const { amount } = createOrderDto;
-    return await this.paymentService.createPaymentOrder(amount);
+  async createPaymentOrder(@Body() createOrderDto: CreatePaymentDto, @Res() res: Response) {
+    const data = await this.paymentService.createPaymentOrder(createOrderDto);
+    res.redirect(200, data.data.checkoutUrl);
   }
 
   // Kiểm tra trạng thái thanh toán
@@ -19,16 +21,14 @@ export class PaymentController {
   }
 
   @Post('confirm-webhook')
-  handleWebhook(@Body() webhookPayload: any): any {
+  async handleWebhook(@Body() webhookPayload: any) {
     const { data, signature } = webhookPayload;
-    const isValid = this.paymentService.validateWebhook(data, signature);
+    const isValid = await this.paymentService.validateWebhook(data, signature);
     if (!isValid) {
       throw new HttpException('Invalid webhook signature', HttpStatus.FORBIDDEN);
     }
-    // Xử lý logic nếu webhook hợp lệ
-    return {
-      message: 'Webhook received successfully',
-      data,
-    };
+    const prefix = this.paymentService.checkPrefixMultiple(data.description)
+    const response = await this.paymentService.webhook(prefix,data,signature)
+    return response
   }
 }

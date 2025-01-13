@@ -1,6 +1,7 @@
 import { HttpException, HttpStatus, Injectable } from "@nestjs/common";
 import axios from "axios";
 import { createHmac } from "crypto";
+import { CreatePaymentDto } from "./dto/create-payment.dto";
 @Injectable()
 export class PaymentService {
   private readonly baseUrl: string;
@@ -14,30 +15,39 @@ export class PaymentService {
   }
 
   // Tạo đơn hàng
-  async createPaymentOrder(amount: number) {
+  async createPaymentOrder(createOrderDto: CreatePaymentDto) {
     try {
-      const description = await this.generateDescription();
+      const domain =
+        createOrderDto.type === 1
+          ? process.env.DOMAIN_LSM
+          : process.env.DOMAIN_AI;
       const dataToSignature = await this.createSignature({
-        amount,
-        cancelUrl: process.env.DOMAIN,
-        description,
+        amount: createOrderDto.amount,
+        cancelUrl: domain,
+        description:
+          createOrderDto.type === 1
+            ? "LSM"
+            : "AI" + Number(String(new Date().getTime()).slice(-6)),
         orderCode: Number(String(new Date().getTime()).slice(-6)),
-        returnUrl: process.env.DOMAIN,
-      })
+        returnUrl: domain,
+      });
       const response = await axios.post(
         `${this.baseUrl}/payment-requests`,
         {
-          amount,
-          cancelUrl: process.env.DOMAIN,
-          description,
+          amount: createOrderDto.amount,
+          cancelUrl: domain,
+          description:
+            createOrderDto.type === 1
+              ? "LSM"
+              : "AI" + Number(String(new Date().getTime()).slice(-6)),
           orderCode: Number(String(new Date().getTime()).slice(-6)),
-          returnUrl: process.env.DOMAIN,
+          returnUrl: domain,
           signature: dataToSignature,
         },
         {
           headers: {
-            'x-client-id': this.clientKey,
-            'x-api-key': this.apiKey,
+            "x-client-id": this.clientKey,
+            "x-api-key": this.apiKey,
           },
         }
       );
@@ -65,19 +75,6 @@ export class PaymentService {
         error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
-  }
-  async generateDescription() {
-    const characters =
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"; // Các ký tự có thể dùng
-    const length = 6; // Độ dài chuỗi mong muốn
-    let result = "";
-
-    for (let i = 0; i < length; i++) {
-      const randomIndex = Math.floor(Math.random() * characters.length); // Random vị trí
-      result += characters[randomIndex];
-    }
-    const description = "LIT" + result;
-    return description;
   }
   private sortObjDataByKey(object: Record<string, any>): Record<string, any> {
     const orderedObject = Object.keys(object)
@@ -108,18 +105,42 @@ export class PaymentService {
   }
   async createSignature(data: any) {
     const sortedKeys = Object.keys(data).sort();
-    const dataString = sortedKeys.map((key) => `${key}=${data[key]}`).join('&');
-    const hmac = createHmac('sha256', process.env.PAYOS_API_SECRET);
+    const dataString = sortedKeys.map((key) => `${key}=${data[key]}`).join("&");
+    const hmac = createHmac("sha256", process.env.PAYOS_API_SECRET);
     hmac.update(dataString);
-    return hmac.digest('hex');
+    return hmac.digest("hex");
   }
 
-  async validateWebhook(data: Record<string, any>, signature: string): Promise<boolean> {
+  async validateWebhook(
+    data: Record<string, any>,
+    signature: string
+  ): Promise<boolean> {
     const sortedDataByKey = this.sortObjDataByKey(data); // Sắp xếp key của object
     const dataQueryStr = this.convertObjToQueryStr(sortedDataByKey); // Chuyển sang query string
-    const dataToSignature = createHmac('sha256', process.env.PAYOS_API_SECRET)
+    const dataToSignature = createHmac("sha256", process.env.PAYOS_API_SECRET)
       .update(dataQueryStr)
-      .digest('hex'); // Tạo chữ ký mới
+      .digest("hex"); // Tạo chữ ký mới
     return dataToSignature === signature; // So sánh chữ ký
+  }
+  checkPrefixMultiple(description) {
+    if (description.startsWith('LSM')) {
+      return 'LSM';
+    } else if (description.startsWith('AI')) {
+      return 'AI';
+    }
+    else{
+      throw new HttpException('Invalid prefix', HttpStatus.BAD_REQUEST);
+    }
+  }
+  async webhook(type: string, payload: any, signature: string) {
+    const url =
+      type == "LSM"
+        ? `${process.env.DOMAIN_LSM}/webhook/`
+        : `${process.env.DOMAIN_AI}/webhook/`;
+    const apiResponse = await axios.post(url, {
+      data: payload,
+      signature: signature,
+    });
+    return apiResponse.data;
   }
 }
